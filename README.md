@@ -18,18 +18,9 @@
 | 工具 | 说明 |
 |------|------|
 | 🌐 HTTP 客户端 | 发送 GET/POST/PUT/PATCH/DELETE 请求，自定义 Headers 与 Body，查看响应 |
-| 🎨 文本美化器 | JSON/XML/SQL 等代码格式化与压缩，支持 11 种语言，自动检测 |
+| 🎨 文本处理 | JSON/XML/SQL 格式化与压缩、MD5 哈希、URL 编码/解码，支持 11 种语言自动检测 |
 | 🖥 SSH Shell | 远程终端连接 + SFTP 文件浏览，支持密码与密钥认证 |
 | 🗄 数据库 | MySQL / PostgreSQL / SQLite / Redis 客户端，SQL 查询与 Redis 命令执行 |
-| 📝 便签 | 三种类型：普通便签、代码片段（语法高亮 + 关键字补全）、待办清单（完成/取消/延后） |
-
-## 便签功能
-
-便签模块支持三种类型：
-
-- **普通便签** — 纯文本记录
-- **代码片段** — 基于 highlight.js 的语法高亮编辑，支持 20+ 语言的关键字自动补全（Tab/Enter 选中，Esc 关闭）
-- **待办清单** — 每条任务四态循环切换：待办 → 完成 → 取消 → 延后，卡片视图带环形进度条
 
 ## 技术栈
 
@@ -97,15 +88,12 @@ dioptase/
 │   ├── styles/
 │   │   └── globals.css      # 全局样式与主题变量
 │   ├── features/
-│   │   ├── notes/           # 便签
-│   │   │   ├── Notes.tsx
-│   │   │   └── completions.ts  # 代码补全数据
 │   │   ├── caffeinate/      # 防休眠
 │   │   ├── clipboard/       # 剪贴板
 │   │   ├── screenshot/      # 截图
 │   │   ├── performance/     # 性能监控
 │   │   ├── http-client/     # HTTP 客户端
-│   │   ├── text-beautifier/ # 文本美化器
+│   │   ├── text-processor/ # 文本处理
 │   │   ├── ssh-shell/       # SSH Shell
 │   │   └── database/        # 数据库
 │   └── hooks/

@@ -1113,6 +1113,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dirs",
+ "image 0.25.10",
  "portable-pty",
  "redis",
  "reqwest 0.12.28",

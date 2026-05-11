@@ -3,7 +3,6 @@ mod commands;
 use commands::{
     caffeinate::{self, CaffeinateState},
     clipboard::{self, ClipboardState},
-    notes::{self, NotesState},
     screenshot, performance, http_client, ssh_shell, mac_cleaner,
     database::commands as db_commands,
 };
@@ -30,7 +29,6 @@ pub fn run() {
             redis: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
         .manage(SshState::new())
-        .manage(NotesState::new())
         .invoke_handler(tauri::generate_handler![
             caffeinate::start_caffeinate,
             caffeinate::stop_caffeinate,
@@ -44,6 +42,7 @@ pub fn run() {
             clipboard::get_clipboard_config,
             clipboard::set_clipboard_max_items,
             clipboard::write_clipboard,
+            clipboard::write_clipboard_item,
             screenshot::capture_screenshot,
             screenshot::capture_selected_screenshot,
             screenshot::save_screenshot,
@@ -89,12 +88,6 @@ pub fn run() {
             db_commands::redis_scan_keys,
             db_commands::redis_get_key,
             db_commands::redis_execute,
-            notes::list_notes,
-            notes::create_note,
-            notes::update_note,
-            notes::delete_note,
-            notes::archive_note,
-            notes::unarchive_note,
             mac_cleaner::scan_mac_cleanup,
             mac_cleaner::delete_mac_cleanup_items,
         ])

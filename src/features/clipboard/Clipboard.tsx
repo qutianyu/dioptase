@@ -74,10 +74,14 @@ export default function Clipboard() {
     }
   };
 
-  const writeItem = async (content: string, id: string) => {
+  const writeItem = async (item: ClipboardItem) => {
     try {
-      await invoke("write_clipboard", { content });
-      setCopiedId(id);
+      if (item.content_type.startsWith("image/")) {
+        await invoke("write_clipboard_item", { content: item.content, contentType: item.content_type });
+      } else {
+        await invoke("write_clipboard", { content: item.content });
+      }
+      setCopiedId(item.id);
       setTimeout(() => setCopiedId(null), 1500);
     } catch (e) {
       console.error(e);
@@ -115,7 +119,7 @@ export default function Clipboard() {
       </div>
 
       {/* Toolbar */}
-      <div className="toolbar-panel clipboard-toolbar flex items-center justify-between mb-4">
+      <div className="toolbar-panel clipboard-toolbar flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full animate-pulse-slow" style={{ background: "var(--bg-success)" }} />
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -171,14 +175,27 @@ export default function Clipboard() {
             >
               {item.content_type === "text" ? (
                 <Type size={14} style={{ color: "var(--text-secondary)" }} />
+              ) : item.content_type.startsWith("image/") ? (
+                <FileText size={14} style={{ color: "var(--text-secondary)" }} />
               ) : (
                 <FileText size={14} style={{ color: "var(--text-secondary)" }} />
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="clipboard-content text-[13px] leading-relaxed break-all" style={{ color: "var(--text-primary)" }}>
-                {item.content.length > 300 ? item.content.slice(0, 300) + "..." : item.content}
-              </p>
+              {item.content_type.startsWith("image/") ? (
+                <div className="clipboard-image-preview mb-2">
+                  <img
+                    src={item.content}
+                    alt="剪贴板图片"
+                    className="rounded-lg max-h-40 object-contain bg-black/5"
+                    style={{ maxWidth: "100%" }}
+                  />
+                </div>
+              ) : (
+                <p className="clipboard-content text-[13px] leading-relaxed break-all" style={{ color: "var(--text-primary)" }}>
+                  {item.content.length > 300 ? item.content.slice(0, 300) + "..." : item.content}
+                </p>
+              )}
               <div className="flex items-center gap-2 mt-1">
                 {item.pinned && (
                   <span className="clipboard-pin-badge">
@@ -204,7 +221,7 @@ export default function Clipboard() {
                 {item.pinned ? <PinOff size={13} /> : <Pin size={13} />}
               </button>
               <button
-                onClick={() => writeItem(item.content, item.id)}
+                onClick={() => writeItem(item)}
                 className="icon-action"
                 style={{
                   background: copiedId === item.id ? "rgba(52, 199, 89, 0.12)" : undefined,

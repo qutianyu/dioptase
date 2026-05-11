@@ -1,3 +1,4 @@
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, sync::Mutex};
 use tauri::State;
@@ -115,6 +116,49 @@ pub fn stop_clipboard_watch(state: State<'_, ClipboardState>) -> Result<String, 
     Ok("Clipboard watching stopped".to_string())
 }
 
+fn get_image_png(clipboard: &mut arboard::Clipboard) -> Option<(String, u64, u64)> {
+    let image = clipboard.get_image().ok()?;
+    let img = image::RgbaImage::from_raw(image.width as u32, image.height as u32, image.bytes.to_vec())?;
+    let mut png_buf: Vec<u8> = Vec::new();
+    let dyn_img = image::DynamicImage::ImageRgba8(img);
+    dyn_img
+        .write_to(&mut std::io::Cursor::new(&mut png_buf), image::ImageFormat::Png)
+        .ok()?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&png_buf);
+    Some((b64, image.width as u64, image.height as u64))
+}
+
+fn now_ts() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+fn make_text_item(content: String) -> ClipboardItem {
+    ClipboardItem {
+        id: uuid::Uuid::new_v4().to_string(),
+        content,
+        content_type: "text".to_string(),
+        timestamp: now_ts(),
+        pinned: false,
+    }
+}
+
+fn make_image_item(b64: String, _width: u64, _height: u64) -> ClipboardItem {
+    ClipboardItem {
+        id: uuid::Uuid::new_v4().to_string(),
+        content: format!("data:image/png;base64,{}", b64),
+        content_type: "image/png".to_string(),
+        timestamp: now_ts(),
+        pinned: false,
+    }
+}
+
+fn is_different(items: &[ClipboardItem], new_content: &str) -> bool {
+    items.first().map_or(true, |last| last.content != new_content)
+}
+
 #[tauri::command]
 pub fn get_clipboard_items(state: State<'_, ClipboardState>) -> Vec<ClipboardItem> {
     let mut items = state.items.lock().unwrap();
@@ -123,27 +167,20 @@ pub fn get_clipboard_items(state: State<'_, ClipboardState>) -> Vec<ClipboardIte
     *state.watching.lock().unwrap() = true;
 
     if let Ok(mut clipboard) = arboard::Clipboard::new() {
+        // Try text first
         if let Ok(text) = clipboard.get_text() {
-            let last = items.first();
-            let should_add = match last {
-                None => true,
-                Some(item) => item.content != text,
-            };
-            if should_add && !text.is_empty() {
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                items.insert(
-                    0,
-                    ClipboardItem {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        content: text,
-                        content_type: "text".to_string(),
-                        timestamp: now,
-                        pinned: false,
-                    },
-                );
+            if !text.is_empty() && is_different(&items, &text) {
+                items.insert(0, make_text_item(text));
+                trim_unpinned_items(&mut items, max_unpinned_items);
+                if let Err(e) = save_clipboard_store(&items, max_unpinned_items) {
+                    eprintln!("{}", e);
+                }
+            }
+        } else if let Some((b64, w, h)) = get_image_png(&mut clipboard) {
+            // No text, try image
+            let content = format!("data:image/png;base64,{}", b64);
+            if is_different(&items, &content) {
+                items.insert(0, make_image_item(b64, w, h));
                 trim_unpinned_items(&mut items, max_unpinned_items);
                 if let Err(e) = save_clipboard_store(&items, max_unpinned_items) {
                     eprintln!("{}", e);
@@ -225,5 +262,39 @@ pub fn set_clipboard_max_items(
 pub fn write_clipboard(content: String) -> Result<String, String> {
     let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {}", e))?;
     clipboard.set_text(&content).map_err(|e| format!("Clipboard write error: {}", e))?;
+    Ok("Written to clipboard".to_string())
+}
+
+#[tauri::command]
+pub fn write_clipboard_item(content: String, content_type: String) -> Result<String, String> {
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| format!("Clipboard error: {}", e))?;
+
+    if content_type.starts_with("image/") {
+        // Decode base64 PNG data URI: "data:image/png;base64,..."
+        let b64 = content
+            .strip_prefix("data:image/png;base64,")
+            .unwrap_or(&content);
+        let png_bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| format!("Base64 decode error: {}", e))?;
+
+        let img = image::load_from_memory(&png_bytes)
+            .map_err(|e| format!("Image decode error: {}", e))?;
+        let rgba = img.to_rgba8();
+        let (width, height) = rgba.dimensions();
+        let image_data = arboard::ImageData {
+            width: width as usize,
+            height: height as usize,
+            bytes: rgba.into_raw().into(),
+        };
+        clipboard
+            .set_image(image_data)
+            .map_err(|e| format!("Clipboard image write error: {}", e))?;
+    } else {
+        clipboard
+            .set_text(&content)
+            .map_err(|e| format!("Clipboard write error: {}", e))?;
+    }
+
     Ok("Written to clipboard".to_string())
 }

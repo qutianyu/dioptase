@@ -8,8 +8,6 @@ import {
   Globe,
   Database,
   Terminal,
-  Paintbrush,
-  StickyNote,
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
@@ -19,6 +17,7 @@ import {
   X,
   Check,
 } from "lucide-react";
+import { BsTrash3 } from "react-icons/bs";
 import { getStoredTheme, setStoredTheme, type ThemeMode } from "./hooks/useTheme";
 import Caffeinate from "./features/caffeinate";
 import Clipboard from "./features/clipboard";
@@ -27,8 +26,7 @@ import Performance from "./features/performance";
 import HttpClient from "./features/http-client";
 import DatabasePage from "./features/database";
 import SshShell from "./features/ssh-shell";
-import TextBeautifier from "./features/text-beautifier";
-import Notes from "./features/notes";
+import TextProcessor from "./features/text-processor";
 import MacCleaner from "./features/mac-cleaner";
 
 const navGroups = [
@@ -36,7 +34,7 @@ const navGroups = [
     label: "系统工具",
     items: [
       { id: "performance", to: "/performance", label: "性能监控", icon: Activity },
-      { id: "mac-cleaner", to: "/mac-cleaner", label: "Mac 清理", icon: Paintbrush },
+      { id: "mac-cleaner", to: "/mac-cleaner", label: "Mac 清理", icon: BsTrash3 },
       { id: "caffeinate", to: "/caffeinate", label: "防休眠", icon: Coffee },
       { id: "clipboard", to: "/clipboard", label: "剪贴板", icon: ClipboardList },
       { id: "screenshot", to: "/screenshot", label: "截图", icon: Camera },
@@ -46,10 +44,9 @@ const navGroups = [
     label: "开发工具",
     items: [
       { id: "http-client", to: "/http-client", label: "HTTP 客户端", icon: Globe },
-      { id: "text-beautifier", to: "/text-beautifier", label: "文本美化器", icon: Sparkles },
+      { id: "text-beautifier", to: "/text-beautifier", label: "文本处理", icon: Sparkles },
       { id: "ssh-shell", to: "/ssh-shell", label: "SSH Shell", icon: Terminal },
       { id: "database", to: "/database", label: "数据库", icon: Database },
-      { id: "notes", to: "/notes", label: "便签", icon: StickyNote },
     ],
   },
 ];
@@ -78,10 +75,9 @@ function App() {
     { path: "/performance", element: <Performance /> },
     { path: "/mac-cleaner", element: <MacCleaner /> },
     { path: "/http-client", element: <HttpClient /> },
-    { path: "/text-beautifier", element: <TextBeautifier /> },
+    { path: "/text-beautifier", element: <TextProcessor /> },
     { path: "/ssh-shell", element: <SshShell /> },
     { path: "/database", element: <DatabasePage /> },
-    { path: "/notes", element: <Notes /> },
   ];
 
   return (

@@ -11,6 +11,9 @@ import {
   ChevronDown,
   Zap,
   Type,
+  Hash,
+  Link,
+  Unlink,
 } from "lucide-react";
 import hljs from "highlight.js";
 import { format as sqlFormat } from "sql-formatter";
@@ -529,7 +532,7 @@ body {
           <p>发送请求并查看响应</p>
         </article>
         <article class="card" data-feature="beautifier">
-          <h3>文本美化器</h3>
+          <h3>文本处理</h3>
           <p>格式化 JSON / XML / SQL</p>
         </article>
       </div>
@@ -610,7 +613,7 @@ version = "\$VERSION"
 
 [features]
 http_client = true
-text_beautifier = true
+text_processor = true
 ssh_shell = true
 database = true
 EOF
@@ -701,14 +704,79 @@ function computeStats(text: string) {
   };
 }
 
+type ToolMode = "format" | "md5" | "url-encode" | "url-decode";
+
+const TOOLS: { id: ToolMode; label: string; icon: typeof Hash }[] = [
+  { id: "format", label: "格式化", icon: Paintbrush },
+  { id: "md5", label: "MD5", icon: Hash },
+  { id: "url-encode", label: "URL 编码", icon: Link },
+  { id: "url-decode", label: "URL 解码", icon: Unlink },
+];
+
+function md5(input: string): string {
+  const rotL = (x: number, n: number) => (x << n) | (x >>> (32 - n));
+  const toHex = (v: number) => {
+    const h = "0123456789abcdef";
+    let s = "";
+    for (let i = 0; i < 4; i++) s += h[(v >>> (i * 8 + 4)) & 0xf] + h[(v >>> (i * 8)) & 0xf];
+    return s;
+  };
+
+  // UTF-8 encode
+  const utf8: number[] = [];
+  for (let i = 0; i < input.length; i++) {
+    let c = input.charCodeAt(i);
+    if (c < 128) utf8.push(c);
+    else if (c < 2048) utf8.push(192 | (c >> 6), 128 | (c & 63));
+    else if (c < 55296 || c >= 57344) utf8.push(224 | (c >> 12), 128 | ((c >> 6) & 63), 128 | (c & 63));
+    else {
+      i++;
+      c = 65536 + (((c & 1023) << 10) | (input.charCodeAt(i) & 1023));
+      utf8.push(240 | (c >> 18), 128 | ((c >> 12) & 63), 128 | ((c >> 6) & 63), 128 | (c & 63));
+    }
+  }
+
+  const origLen = utf8.length * 8;
+  utf8.push(0x80);
+  while ((utf8.length * 8) % 512 !== 448) utf8.push(0);
+  for (let i = 0; i < 8; i++) utf8.push((origLen >>> (i * 8)) & 0xff);
+
+  const K = [0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be, 0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8, 0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a, 0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c, 0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70, 0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665, 0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1, 0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391];
+  const S = [7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21];
+
+  let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+
+  for (let i = 0; i < utf8.length; i += 64) {
+    const M: number[] = [];
+    for (let j = 0; j < 64; j += 4) M.push(utf8[i + j] | (utf8[i + j + 1] << 8) | (utf8[i + j + 2] << 16) | (utf8[i + j + 3] << 24));
+
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let j = 0; j < 64; j++) {
+      let F: number, g: number;
+      if (j < 16) { F = (B & C) | (~B & D); g = j; }
+      else if (j < 32) { F = (D & B) | (~D & C); g = (5 * j + 1) % 16; }
+      else if (j < 48) { F = B ^ C ^ D; g = (3 * j + 5) % 16; }
+      else { F = C ^ (B | ~D); g = (7 * j) % 16; }
+
+      const temp = D; D = C; C = B;
+      B = (B + rotL(A + F + K[j] + M[g], S[j])) | 0;
+      A = temp;
+    }
+    a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+  }
+
+  return toHex(a0) + toHex(b0) + toHex(c0) + toHex(d0);
+}
+
 interface FormatResult {
   formatted: string;
   highlighted: string;
   errorMsg: string;
 }
 
-export default function TextBeautifier() {
+export default function TextProcessor() {
   const [input, setInput] = useState("");
+  const [tool, setTool] = useState<ToolMode>("format");
   const [language, setLanguage] = useState("json");
   const [mode, setMode] = useState<"beautify" | "minify">("beautify");
   const [userLocked, setUserLocked] = useState(false);
@@ -728,52 +796,81 @@ export default function TextBeautifier() {
     let formatted = "";
     let errorMsg = "";
 
-    switch (language) {
-      case "json": {
-        if (mode === "minify") {
-          formatted = minifyJson(input);
-        } else {
-          try {
-            formatted = JSON.stringify(JSON.parse(input), null, 2);
-          } catch (e) {
-            errorMsg = `JSON 解析失败: ${String(e).slice(0, 100)}`;
-            formatted = input;
-          }
-        }
+    switch (tool) {
+      case "md5": {
+        formatted = md5(input);
         break;
       }
-      case "xml": {
-        formatted = mode === "minify" ? minifyXml(input) : formatXml(input);
+      case "url-encode": {
+        formatted = encodeURIComponent(input);
         break;
       }
-      case "sql": {
-        if (mode === "minify") {
-          formatted = minifySql(input);
-        } else {
-          try {
-            formatted = sqlFormat(input, { language: "sql" });
-          } catch {
-            errorMsg = "SQL 格式化失败";
-            formatted = input;
-          }
+      case "url-decode": {
+        try {
+          formatted = decodeURIComponent(input);
+        } catch {
+          errorMsg = "URL 解码失败：输入不是有效的 URL 编码字符串";
+          formatted = input;
         }
         break;
       }
       default: {
-        formatted = input;
-        break;
+        // format mode
+        switch (language) {
+          case "json": {
+            if (mode === "minify") {
+              formatted = minifyJson(input);
+            } else {
+              try {
+                formatted = JSON.stringify(JSON.parse(input), null, 2);
+              } catch (e) {
+                errorMsg = `JSON 解析失败: ${String(e).slice(0, 100)}`;
+                formatted = input;
+              }
+            }
+            break;
+          }
+          case "xml": {
+            formatted = mode === "minify" ? minifyXml(input) : formatXml(input);
+            break;
+          }
+          case "sql": {
+            if (mode === "minify") {
+              formatted = minifySql(input);
+            } else {
+              try {
+                formatted = sqlFormat(input, { language: "sql" });
+              } catch {
+                errorMsg = "SQL 格式化失败";
+                formatted = input;
+              }
+            }
+            break;
+          }
+          default: {
+            formatted = input;
+            break;
+          }
+        }
       }
     }
 
     let highlighted = "";
-    try {
-      const lang = hljs.getLanguage(language);
-      if (lang) {
-        highlighted = hljs.highlight(formatted, { language, ignoreIllegals: true }).value;
-      } else {
-        highlighted = hljs.highlightAuto(formatted).value;
+    if (tool === "format" && !errorMsg) {
+      try {
+        const lang = hljs.getLanguage(language);
+        if (lang) {
+          highlighted = hljs.highlight(formatted, { language, ignoreIllegals: true }).value;
+        } else {
+          highlighted = hljs.highlightAuto(formatted).value;
+        }
+      } catch {
+        highlighted = formatted
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
       }
-    } catch {
+    } else {
       highlighted = formatted
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -781,7 +878,7 @@ export default function TextBeautifier() {
     }
 
     return { formatted, highlighted, errorMsg };
-  }, [input, language, mode]);
+  }, [input, language, mode, tool]);
 
   useEffect(() => {
     setError(result.errorMsg || null);
@@ -822,6 +919,7 @@ export default function TextBeautifier() {
   const handleClear = () => {
     setInput("");
     setError(null);
+    setTool("format");
     setMode("beautify");
     setUserLocked(false);
   };
@@ -881,76 +979,100 @@ export default function TextBeautifier() {
             <div className="page-icon" style={{ background: ICON_BG }}>
               <Paintbrush size={18} color={ICON_COLOR} strokeWidth={2} />
             </div>
-            <h2 className="page-title">文本美化器</h2>
-            <p className="page-subtitle">格式化与语法高亮</p>
+            <h2 className="page-title">文本处理</h2>
+            <p className="page-subtitle">格式化 · 编码 · 哈希</p>
           </div>
         </div>
       </div>
 
       {/* ===== Toolbar ===== */}
-      <div className="toolbar-panel flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          {/* Language Selector */}
-          <div className="relative">
-            <select
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className="appearance-none macos-input pr-7 text-[12px] font-medium"
-              style={{ width: 130 }}
-            >
-              {LANGUAGES.map((l) => (
-                <option key={l.value} value={l.value}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={12}
-              className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-              style={{ color: "var(--text-muted)" }}
-            />
-          </div>
-
-          {/* Mode Toggle */}
-          <div className="beautifier-mode-toggle">
+      <div className="toolbar-panel mb-2">
+        {/* Tool Selector */}
+        <div className="flex items-center gap-1.5 mb-3">
+          {TOOLS.map((t) => (
             <button
-              onClick={() => handleModeChange("beautify")}
-              className={mode === "beautify" ? "active" : ""}
-              title="美化"
+              key={t.id}
+              onClick={() => setTool(t.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
+                tool === t.id ? "text-white" : ""
+              }`}
+              style={{
+                background: tool === t.id ? "var(--bg-button)" : "transparent",
+                color: tool === t.id ? "#fff" : "var(--text-secondary)",
+              }}
             >
-              <Maximize2 size={12} />
-              <span>美化</span>
+              <t.icon size={13} strokeWidth={2} />
+              {t.label}
             </button>
-            <button
-              onClick={() => handleModeChange("minify")}
-              className={mode === "minify" ? "active" : ""}
-              title="压缩"
-            >
-              <Minimize2 size={12} />
-              <span>压缩</span>
-            </button>
-          </div>
-
-          {/* Example Button */}
-          <button onClick={handleLoadExample} className="btn-secondary flex items-center gap-1.5 text-[12px] py-1.5">
-            <Sparkles size={12} />
-            示例
-          </button>
+          ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCopy}
-            disabled={!result.formatted}
-            className="btn-secondary flex items-center gap-1.5 text-[12px] py-1.5"
-          >
-            {copied ? <Check size={13} /> : <Copy size={13} />}
-            {copied ? "已复制" : "复制"}
-          </button>
-          <button onClick={handleClear} disabled={!input} className="btn-secondary flex items-center gap-1.5 text-[12px] py-1.5">
-            <Eraser size={12} />
-            清除
-          </button>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Language Selector & Mode Toggle - only for format tool */}
+            {tool === "format" && (
+              <>
+                <div className="relative">
+                  <select
+                    value={language}
+                    onChange={(e) => handleLanguageChange(e.target.value)}
+                    className="appearance-none macos-input pr-7 text-[12px] font-medium"
+                    style={{ width: 130 }}
+                  >
+                    {LANGUAGES.map((l) => (
+                      <option key={l.value} value={l.value}>
+                        {l.label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={12}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: "var(--text-muted)" }}
+                  />
+                </div>
+
+                <div className="beautifier-mode-toggle">
+                  <button
+                    onClick={() => handleModeChange("beautify")}
+                    className={mode === "beautify" ? "active" : ""}
+                    title="美化"
+                  >
+                    <Maximize2 size={12} />
+                    <span>美化</span>
+                  </button>
+                  <button
+                    onClick={() => handleModeChange("minify")}
+                    className={mode === "minify" ? "active" : ""}
+                    title="压缩"
+                  >
+                    <Minimize2 size={12} />
+                    <span>压缩</span>
+                  </button>
+                </div>
+
+                <button onClick={handleLoadExample} className="btn-secondary flex items-center gap-1.5 text-[12px] py-1.5">
+                  <Sparkles size={12} />
+                  示例
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopy}
+              disabled={!result.formatted}
+              className="btn-secondary flex items-center gap-1.5 text-[12px] py-1.5"
+            >
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+              {copied ? "已复制" : "复制"}
+            </button>
+            <button onClick={handleClear} disabled={!input} className="btn-secondary flex items-center gap-1.5 text-[12px] py-1.5">
+              <Eraser size={12} />
+              清除
+            </button>
+          </div>
         </div>
       </div>
 
@@ -966,7 +1088,7 @@ export default function TextBeautifier() {
               {input && (
                 <span className="badge badge-blue">
                   <Zap size={8} />
-                  {langLabel}
+                  {tool === "format" ? langLabel : TOOLS.find(t => t.id === tool)?.label || "输入"}
                 </span>
               )}
             </div>
@@ -1016,7 +1138,7 @@ export default function TextBeautifier() {
               <span className="beautifier-panel-title">输出</span>
               {result.formatted && (
                 <span className={`badge ${error ? "badge-red" : "badge-green"}`}>
-                  {error ? "错误" : mode === "beautify" ? "已格式化" : "已压缩"}
+                  {error ? "错误" : tool === "format" ? (mode === "beautify" ? "已格式化" : "已压缩") : TOOLS.find(t => t.id === tool)?.label || "完成"}
                 </span>
               )}
             </div>
@@ -1043,11 +1165,13 @@ export default function TextBeautifier() {
             ) : (
               <div className="beautifier-empty">
                 <FileCode size={32} style={{ color: "var(--text-muted)", opacity: 0.4 }} />
-                <p style={{ color: "var(--text-muted)" }}>格式化结果将显示在此处</p>
-                <button onClick={handleLoadExample} className="btn-secondary flex items-center gap-1.5 text-[12px] mt-3">
-                  <Sparkles size={12} />
-                  加载示例
-                </button>
+                <p style={{ color: "var(--text-muted)" }}>处理结果将显示在此处</p>
+                {tool === "format" && (
+                  <button onClick={handleLoadExample} className="btn-secondary flex items-center gap-1.5 text-[12px] mt-3">
+                    <Sparkles size={12} />
+                    加载示例
+                  </button>
+                )}
               </div>
             )}
           </div>

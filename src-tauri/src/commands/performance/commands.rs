@@ -139,26 +139,15 @@ fn get_disk_io_rate() -> (f64, f64) {
 }
 
 fn get_thread_count() -> usize {
-    fn read_threads(field: &str) -> Option<usize> {
-        let output = std::process::Command::new("ps")
-            .args(["-axo", field])
-            .output()
-            .ok()?;
-
-        if !output.status.success() {
-            return None;
-        }
-
-        let count = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .filter_map(|line| line.trim().parse::<usize>().ok())
-            .sum();
-
-        Some(count)
-    }
-
-    read_threads("thcount")
-        .or_else(|| read_threads("nlwp"))
+    // Use sysctl kern.num_threads (the standard macOS API for total system threads)
+    std::process::Command::new("sysctl")
+        .args(["-n", "kern.num_threads"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            let s = String::from_utf8_lossy(&output.stdout);
+            s.trim().parse::<usize>().ok()
+        })
         .unwrap_or(0)
 }
 
