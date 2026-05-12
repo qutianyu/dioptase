@@ -6,3 +6,4 @@ pub mod http_client;
 pub mod database;
 pub mod ssh_shell;
 pub mod mac_cleaner;
+pub mod git;

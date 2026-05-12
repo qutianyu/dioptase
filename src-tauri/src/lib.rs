@@ -3,12 +3,13 @@ mod commands;
 use commands::{
     caffeinate::{self, CaffeinateState},
     clipboard::{self, ClipboardState},
-    screenshot, performance, http_client, ssh_shell, mac_cleaner,
+    screenshot, performance, http_client, ssh_shell, mac_cleaner, git,
     database::commands as db_commands,
 };
 
 use db_commands::DbState;
 use ssh_shell::SshState;
+use git::GitState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,6 +30,7 @@ pub fn run() {
             redis: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
         .manage(SshState::new())
+        .manage(GitState::new())
         .invoke_handler(tauri::generate_handler![
             caffeinate::start_caffeinate,
             caffeinate::stop_caffeinate,
@@ -90,6 +92,28 @@ pub fn run() {
             db_commands::redis_execute,
             mac_cleaner::scan_mac_cleanup,
             mac_cleaner::delete_mac_cleanup_items,
+            git::git_set_repo_path,
+            git::git_get_repo_path,
+            git::git_check_repo,
+            git::git_init,
+            git::git_status,
+            git::git_log,
+            git::git_diff,
+            git::git_stage,
+            git::git_stage_all,
+            git::git_unstage,
+            git::git_commit,
+            git::git_push,
+            git::git_pull,
+            git::git_branches,
+            git::git_checkout,
+            git::git_create_branch,
+            git::git_get_remote,
+            git::git_fetch,
+            git::git_branch_diff_files,
+            git::git_branch_diff_content,
+            git::git_commit_diff,
+            git::git_restore_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

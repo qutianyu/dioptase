@@ -12,7 +12,7 @@ set -euo pipefail
 # Prerequisites:
 #   - macOS 14+
 #   - Xcode Command Line Tools (or full Xcode)
-#   - Node.js 18+ and pnpm
+#   - Node.js 18+ and npm
 #   - Rust toolchain (rustup)
 #   - [optional] Apple Developer ID for signing/notarization
 # ──────────────────────────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ if [[ "$MAJOR_VER" -lt 14 ]]; then
 fi
 echo "    macOS $MACOS_VER ✓"
 
-for cmd in node pnpm rustc cargo; do
+for cmd in node npm rustc cargo; do
   if ! command -v "$cmd" &>/dev/null; then
     echo "ERROR: $cmd not found. Please install it first." >&2
     exit 1
@@ -98,13 +98,13 @@ fi
 echo ""
 echo "==> Installing npm dependencies..."
 cd "$PROJECT_DIR"
-pnpm install --frozen-lockfile
+npm ci
 
 # ── Build ────────────────────────────────────────────────────────────────────
 
 echo ""
 echo "==> Building Dioptase..."
-pnpm tauri build
+npm run tauri build
 
 # ── Sign (optional) ──────────────────────────────────────────────────────────
 

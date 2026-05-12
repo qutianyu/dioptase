@@ -16,6 +16,7 @@ import {
   Monitor,
   X,
   Check,
+  GitBranch,
 } from "lucide-react";
 import { BsTrash3 } from "react-icons/bs";
 import { getStoredTheme, setStoredTheme, type ThemeMode } from "./hooks/useTheme";
@@ -28,6 +29,7 @@ import DatabasePage from "./features/database";
 import SshShell from "./features/ssh-shell";
 import TextProcessor from "./features/text-processor";
 import MacCleaner from "./features/mac-cleaner";
+import GitUI from "./features/git";
 
 const navGroups = [
   {
@@ -44,6 +46,7 @@ const navGroups = [
     label: "开发工具",
     items: [
       { id: "http-client", to: "/http-client", label: "HTTP 客户端", icon: Globe },
+      { id: "git", to: "/git", label: "Git", icon: GitBranch },
       { id: "text-beautifier", to: "/text-beautifier", label: "文本处理", icon: Sparkles },
       { id: "ssh-shell", to: "/ssh-shell", label: "SSH Shell", icon: Terminal },
       { id: "database", to: "/database", label: "数据库", icon: Database },
@@ -75,6 +78,7 @@ function App() {
     { path: "/performance", element: <Performance /> },
     { path: "/mac-cleaner", element: <MacCleaner /> },
     { path: "/http-client", element: <HttpClient /> },
+    { path: "/git", element: <GitUI /> },
     { path: "/text-beautifier", element: <TextProcessor /> },
     { path: "/ssh-shell", element: <SshShell /> },
     { path: "/database", element: <DatabasePage /> },
