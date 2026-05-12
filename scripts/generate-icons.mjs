@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const root = new URL("..", import.meta.url).pathname;
-const sourceIcon = join(root, "public", "icon2.png");
+const sourceIcon = join(root, "public", "icon.png");
 const iconDir = join(root, "src-tauri", "icons");
 const iconsetDir = join(iconDir, "icon.iconset");
 
