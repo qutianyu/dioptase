@@ -220,6 +220,7 @@ export default function Database() {
   const [redisKeyDetailName, setRedisKeyDetailName] = useState<string | null>(null);
   const [redisPattern, setRedisPattern] = useState("*");
   const [redisCmd, setRedisCmd] = useState("");
+  const [redisDatabases, setRedisDatabases] = useState<Record<string, number>>({});
   const queryConnection = connections.find((c) => c.id === queryConnId) ?? null;
   const queryIsRedis = queryConnection ? isRedisType(queryConnection.db_type) : false;
   const showDatabaseEmptyState = !queryConnId
@@ -269,6 +270,8 @@ export default function Database() {
       await invoke("connect_db", { id });
       setConnectedIds((prev) => new Set(prev).add(id));
       setExpandedConnections((prev) => new Set(prev).add(id));
+      const redisDbs = await invoke<Record<string, number>>("redis_current_databases");
+      setRedisDatabases(redisDbs);
       return true;
     } catch (e) {
       alert(`Connection failed: ${e}`);
@@ -283,6 +286,11 @@ export default function Database() {
     setConnectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     setExpandedConnections((prev) => { const n = new Set(prev); n.delete(id); return n; });
     setExpandedDbs((prev) => new Set([...prev].filter((key) => !key.startsWith(`${id}:`))));
+    setRedisDatabases((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     if (queryConnId === id) {
       setQueryConnId(null);
       setQueryDb("");
@@ -312,7 +320,9 @@ export default function Database() {
       const conns = await invoke<SavedConnection[]>("list_db_connections");
       setConnections(conns);
       const ids = await invoke<string[]>("list_connected_db_ids");
+      const redisDbs = await invoke<Record<string, number>>("redis_current_databases");
       setConnectedIds(new Set(ids));
+      setRedisDatabases(redisDbs);
       setExpandedConnections((prev) => new Set([...prev, ...ids]));
       await Promise.all(ids.map(async (id) => {
         const conn = conns.find((c) => c.id === id);
@@ -697,6 +707,22 @@ export default function Database() {
     }
   };
 
+  const selectRedisDatabase = async (id: string, database: number) => {
+    setLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await invoke("redis_select_database", { id, database });
+      setRedisDatabases((prev) => ({ ...prev, [id]: database }));
+      setRedisKeys((prev) => ({ ...prev, [id]: [] }));
+      setRedisKeyDetail(null);
+      setRedisKeyDetailName(null);
+      await scanRedisKeys(id);
+    } catch (e) {
+      alert(`Switch Redis database failed: ${e}`);
+    } finally {
+      setLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
   const getRedisKeyValue = async (id: string, key: string) => {
     setRedisKeyDetailName(key);
     setRedisKeyDetail(null);
@@ -868,6 +894,18 @@ export default function Database() {
                     {isRedisType(conn.db_type) ? (
                       <div>
                         <div className="flex items-center gap-1 mb-1.5">
+                          <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>DB</span>
+                          <select
+                            value={redisDatabases[conn.id] ?? 0}
+                            onChange={(e) => selectRedisDatabase(conn.id, Number(e.target.value))}
+                            className="macos-input text-[11px] py-0.5 px-1.5"
+                            style={{ width: 58 }}
+                            disabled={isLoad}
+                          >
+                            {Array.from({ length: 16 }, (_, index) => (
+                              <option key={index} value={index}>{index}</option>
+                            ))}
+                          </select>
                           <Search size={10} style={{ color: "var(--text-muted)" }} />
                           <input
                             value={redisPattern}
@@ -1628,16 +1666,6 @@ function AddConnectionModal({
                   onChange={(e) => updateConfig("password", e.target.value)}
                   className="macos-input"
                   placeholder="可留空"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: "var(--text-secondary)" }}>数据库编号</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={(config as { type: "Redis"; config: DbRedisConfig }).config.database}
-                  onChange={(e) => updateConfig("database", Number(e.target.value))}
-                  className="macos-input"
                 />
               </div>
             </>

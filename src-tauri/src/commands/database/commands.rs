@@ -10,6 +10,7 @@ pub struct DbState {
     pub postgres: Mutex<HashMap<String, sqlx::PgPool>>,
     pub sqlite: Mutex<HashMap<String, sqlx::SqlitePool>>,
     pub redis: Mutex<HashMap<String, redis::Client>>,
+    pub redis_databases: Mutex<HashMap<String, u8>>,
 }
 
 #[tauri::command]
@@ -95,6 +96,7 @@ pub async fn update_db_connection(
     if let Some(pool) = postgres_pool { pool.close().await; }
     if let Some(pool) = sqlite_pool { pool.close().await; }
     state.redis.lock().unwrap().remove(&id);
+    state.redis_databases.lock().unwrap().remove(&id);
 
     Ok(conn)
 }
@@ -133,11 +135,16 @@ pub async fn connect_db(id: String, state: State<'_, DbState>) -> Result<(), Str
 
     match &conn.db_type {
         DbType::Redis(_config) => {
-            let url = conn.db_type.build_url()?;
+            let mut db_type = conn.db_type.clone();
+            if let DbType::Redis(config) = &mut db_type {
+                config.database = 0;
+            }
+            let url = db_type.build_url()?;
             let client = redis::Client::open(url.as_str()).map_err(|e| format!("Invalid URL: {}", e))?;
             let mut rconn = client.get_multiplexed_async_connection().await.map_err(|e| format!("Connection failed: {}", e))?;
             redis::cmd("PING").query_async::<String>(&mut rconn).await.map_err(|e| format!("PING failed: {}", e))?;
-            state.redis.lock().unwrap().insert(id, client);
+            state.redis.lock().unwrap().insert(id.clone(), client);
+            state.redis_databases.lock().unwrap().insert(id, 0);
             Ok(())
         }
         DbType::MySQL(_) => {
@@ -173,6 +180,7 @@ pub async fn disconnect_db(id: String, state: State<'_, DbState>) -> Result<(), 
     if let Some(pool) = postgres_pool { pool.close().await; }
     if let Some(pool) = sqlite_pool { pool.close().await; }
     state.redis.lock().unwrap().remove(&id);
+    state.redis_databases.lock().unwrap().remove(&id);
     Ok(())
 }
 
@@ -1244,6 +1252,39 @@ pub async fn drop_column(
 }
 
 // ── Redis Commands ──
+
+#[tauri::command]
+pub async fn redis_select_database(
+    id: String,
+    database: u8,
+    state: State<'_, DbState>,
+) -> Result<(), String> {
+    let connections = load_connections()?;
+    let conn = connections.iter().find(|c| c.id == id)
+        .ok_or("Connection not found")?;
+
+    let mut db_type = conn.db_type.clone();
+    match &mut db_type {
+        DbType::Redis(config) => {
+            config.database = database;
+        }
+        _ => return Err("Connection is not Redis".to_string()),
+    }
+
+    let url = db_type.build_url()?;
+    let client = redis::Client::open(url.as_str()).map_err(|e| format!("Invalid URL: {}", e))?;
+    let mut rconn = client.get_multiplexed_async_connection().await.map_err(|e| format!("Connection failed: {}", e))?;
+    redis::cmd("PING").query_async::<String>(&mut rconn).await.map_err(|e| format!("PING failed: {}", e))?;
+
+    state.redis.lock().unwrap().insert(id.clone(), client);
+    state.redis_databases.lock().unwrap().insert(id, database);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn redis_current_databases(state: State<'_, DbState>) -> HashMap<String, u8> {
+    state.redis_databases.lock().unwrap().clone()
+}
 
 #[tauri::command]
 pub async fn redis_scan_keys(

@@ -452,8 +452,15 @@ textarea {
 
 .sidebar-collapsed .nav-item {
   justify-content: center;
+  width: 32px;
+  height: 32px;
   padding-left: 0;
   padding-right: 0;
+  margin: 0 auto;
+}
+
+.sidebar-collapsed .nav-item > svg {
+  transform: scale(0.95);
 }
 
 .sidebar-collapsed .nav-group-label {
@@ -1784,6 +1791,144 @@ textarea {
   background: rgba(127, 127, 127, 0.035);
   padding: 10px 12px;
   flex-shrink: 0;
+}
+
+.git-sidebar-header {
+  padding: 9px 10px 9px 12px;
+}
+
+.git-sidebar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.git-sidebar-title-icon,
+.git-sidebar-nav-icon,
+.git-branch-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.git-sidebar-title-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--bg-button);
+}
+
+.git-branch-card {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.git-branch-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.git-branch-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--bg-button);
+}
+
+.git-branch-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-left: 30px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.git-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+}
+
+.git-sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+
+.git-sidebar-nav-item:hover {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.git-sidebar-nav-item.is-active {
+  background: rgba(0, 122, 255, 0.1);
+  border-color: rgba(0, 122, 255, 0.16);
+  color: var(--bg-button);
+}
+
+.git-sidebar-nav-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.git-sidebar-nav-item.is-active .git-sidebar-nav-icon {
+  background: var(--bg-button);
+  color: #fff;
+}
+
+.git-sidebar-nav-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-button);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.git-sidebar-nav-item.is-active .git-sidebar-badge {
+  background: rgba(0, 122, 255, 0.14);
+  color: var(--bg-button);
 }
 
 .ssh-connection-list {

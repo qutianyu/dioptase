@@ -62,6 +62,11 @@ interface GitBranchDiffFile {
   deleted: number;
 }
 
+interface GitDiffResult {
+  filename: string;
+  diff: string;
+}
+
 interface DiffLine {
   type: "context" | "add" | "delete";
   content: string;
@@ -411,6 +416,25 @@ export default function GitUI() {
     }
   }, [repoPath]);
 
+  const loadStatusDiff = useCallback(async (entry: GitStatusEntry, staged: boolean) => {
+    if (!repoPath) return;
+    const leftLabel = staged ? "HEAD" : entry.kind === "untracked" ? "未跟踪" : "工作区";
+    const rightLabel = staged ? "暂存区" : "当前文件";
+    setDiffModal({ open: true, title: entry.path, leftLabel, rightLabel, hunks: [], loading: true });
+    try {
+      const result = await invoke<GitDiffResult[]>("git_diff", {
+        repoPath,
+        file: entry.path,
+        staged,
+      });
+      const raw = result.map((item) => item.diff).join("\n");
+      setDiffModal({ open: true, title: entry.path, leftLabel, rightLabel, hunks: parseUnifiedDiff(raw), loading: false });
+    } catch (e) {
+      setDiffModal({ open: true, title: entry.path, leftLabel, rightLabel, hunks: [], loading: false });
+      setError(String(e));
+    }
+  }, [repoPath]);
+
   // Branch ops
   const switchBranch = async (name: string) => {
     if (!repoPath) return;
@@ -539,9 +563,11 @@ export default function GitUI() {
           {showSidebar ? (
             <aside className="ssh-sidebar panel">
               {/* Tabs */}
-              <div className="ssh-panel-header">
-                <div className="flex items-center gap-2">
-                  <ListTree size={14} style={{ color: "var(--bg-button)" }} />
+              <div className="ssh-panel-header git-sidebar-header">
+                <div className="git-sidebar-title">
+                  <span className="git-sidebar-title-icon">
+                    <ListTree size={14} />
+                  </span>
                   <span className="section-label">功能</span>
                 </div>
                 <button onClick={() => setShowSidebar(false)} className="icon-action" style={{ width: 26, height: 26 }} title="收起">
@@ -551,12 +577,14 @@ export default function GitUI() {
 
               {/* Branch indicator */}
               {status && (
-                <div className="px-3 py-2.5 border-b" style={{ borderColor: "var(--border-color)" }}>
-                  <div className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>
-                    <GitBranch size={13} style={{ color: "var(--bg-button)" }} />
-                    {status.branch}
+                <div className="git-branch-card">
+                  <div className="git-branch-name">
+                    <span className="git-branch-icon">
+                      <GitBranch size={13} />
+                    </span>
+                    <span className="truncate">{status.branch}</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+                  <div className="git-branch-meta">
                     {status.ahead > 0 && <span className="flex items-center gap-0.5"><ArrowUpFromLine size={9} /> {status.ahead}</span>}
                     {status.behind > 0 && <span className="flex items-center gap-0.5"><ArrowDownToLine size={9} /> {status.behind}</span>}
                     {status.ahead === 0 && status.behind === 0 && <span>已同步</span>}
@@ -565,7 +593,7 @@ export default function GitUI() {
               )}
 
               {/* Tab list */}
-              <div className="flex flex-col p-2 gap-0.5">
+              <div className="git-sidebar-nav">
                 {([
                   { id: "status" as Tab, label: "变更", icon: List },
                   { id: "log" as Tab, label: "历史", icon: GitCommitHorizontal },
@@ -575,19 +603,14 @@ export default function GitUI() {
                   <button
                     key={id}
                     onClick={() => setActiveTab(id)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-200 text-left"
-                    style={{
-                      background: activeTab === id ? "var(--bg-button)" : "transparent",
-                      color: activeTab === id ? "#fff" : "var(--text-secondary)",
-                    }}
+                    className={`git-sidebar-nav-item ${activeTab === id ? "is-active" : ""}`}
                   >
-                    <Icon size={15} />
-                    <span>{label}</span>
+                    <span className="git-sidebar-nav-icon">
+                      <Icon size={15} />
+                    </span>
+                    <span className="git-sidebar-nav-label">{label}</span>
                     {id === "status" && hasChanges && (
-                      <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full" style={{
-                        background: activeTab === id ? "rgba(255,255,255,0.2)" : "var(--bg-button)",
-                        color: "#fff",
-                      }}>
+                      <span className="git-sidebar-badge">
                         {stagedFiles.length + unstagedFiles.length + untrackedFiles.length}
                       </span>
                     )}
@@ -662,14 +685,19 @@ export default function GitUI() {
                           </div>
                           <div>
                             {stagedFiles.map((entry) => (
-                              <div key={`staged-${entry.path}`} className="flex items-center gap-3 px-3 py-2 border-b text-[12px]" style={{ borderColor: "var(--border-color)" }}>
+                              <div
+                                key={`staged-${entry.path}`}
+                                className="flex items-center gap-3 px-3 py-2 border-b text-[12px] cursor-pointer"
+                                style={{ borderColor: "var(--border-color)" }}
+                                onClick={() => loadStatusDiff(entry, true)}
+                              >
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {kindIcon(entry.kind)}
                                   <span className="truncate">{entry.path}</span>
                                 </div>
                                 <span className="text-[11px]" style={{ color: "#34c759" }}>{kindLabel(entry.kind)}</span>
                                 <span>
-                                  <button onClick={() => unstageFiles([entry.path])} className="icon-action" style={{ width: 22, height: 22 }} title="取消暂存">
+                                  <button onClick={(e) => { e.stopPropagation(); unstageFiles([entry.path]); }} className="icon-action" style={{ width: 22, height: 22 }} title="取消暂存">
                                     <X size={10} />
                                   </button>
                                 </span>
@@ -687,17 +715,22 @@ export default function GitUI() {
                           </div>
                           <div>
                             {unstagedFiles.map((entry) => (
-                              <div key={`unstaged-${entry.path}`} className="flex items-center gap-3 px-3 py-2 border-b text-[12px]" style={{ borderColor: "var(--border-color)" }}>
+                              <div
+                                key={`unstaged-${entry.path}`}
+                                className="flex items-center gap-3 px-3 py-2 border-b text-[12px] cursor-pointer"
+                                style={{ borderColor: "var(--border-color)" }}
+                                onClick={() => loadStatusDiff(entry, false)}
+                              >
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {kindIcon(entry.kind)}
                                   <span className="truncate">{entry.path}</span>
                                 </div>
                                 <span className="text-[11px]" style={{ color: "#ff9500" }}>{kindLabel(entry.kind)}</span>
                                 <span className="flex items-center gap-1">
-                                  <button onClick={() => stageFiles([entry.path])} className="icon-action" style={{ width: 22, height: 22 }} title="暂存">
+                                  <button onClick={(e) => { e.stopPropagation(); stageFiles([entry.path]); }} className="icon-action" style={{ width: 22, height: 22 }} title="暂存">
                                     <Plus size={10} />
                                   </button>
-                                  <button onClick={() => restoreFile(entry.path)} className="icon-action danger" style={{ width: 22, height: 22 }} title="回滚">
+                                  <button onClick={(e) => { e.stopPropagation(); restoreFile(entry.path); }} className="icon-action danger" style={{ width: 22, height: 22 }} title="回滚">
                                     <ArrowRight size={10} style={{ transform: "rotate(180deg)" }} />
                                   </button>
                                 </span>
@@ -718,14 +751,19 @@ export default function GitUI() {
                           </div>
                           <div>
                             {untrackedFiles.map((entry) => (
-                              <div key={`untracked-${entry.path}`} className="flex items-center gap-3 px-3 py-2 border-b text-[12px]" style={{ borderColor: "var(--border-color)" }}>
+                              <div
+                                key={`untracked-${entry.path}`}
+                                className="flex items-center gap-3 px-3 py-2 border-b text-[12px] cursor-pointer"
+                                style={{ borderColor: "var(--border-color)" }}
+                                onClick={() => loadStatusDiff(entry, false)}
+                              >
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   {kindIcon(entry.kind)}
                                   <span className="truncate">{entry.path}</span>
                                 </div>
                                 <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{kindLabel(entry.kind)}</span>
                                 <span>
-                                  <button onClick={() => stageFiles([entry.path])} className="icon-action" style={{ width: 22, height: 22 }} title="暂存">
+                                  <button onClick={(e) => { e.stopPropagation(); stageFiles([entry.path]); }} className="icon-action" style={{ width: 22, height: 22 }} title="暂存">
                                     <Plus size={10} />
                                   </button>
                                 </span>

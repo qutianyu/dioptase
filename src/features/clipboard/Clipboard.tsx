@@ -23,6 +23,7 @@ export default function Clipboard() {
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [maxItems, setMaxItems] = useState(50);
+  const [maxItemsDraft, setMaxItemsDraft] = useState("50");
 
   const fetchItems = async () => {
     try {
@@ -63,9 +64,11 @@ export default function Clipboard() {
     }
   };
 
-  const updateMaxItems = async (value: number) => {
-    const next = Math.max(1, Math.min(500, value || 1));
+  const updateMaxItems = async (value: string) => {
+    const parsed = Number(value);
+    const next = Number.isFinite(parsed) ? Math.max(1, Math.min(500, Math.trunc(parsed))) : maxItems;
     setMaxItems(next);
+    setMaxItemsDraft(String(next));
     try {
       const list = await invoke<ClipboardItem[]>("set_clipboard_max_items", { maxItems: next });
       setItems(list);
@@ -90,7 +93,10 @@ export default function Clipboard() {
 
   useEffect(() => {
     invoke("start_clipboard_watch").catch(console.error);
-    invoke<number>("get_clipboard_config").then(setMaxItems).catch(console.error);
+    invoke<number>("get_clipboard_config").then((value) => {
+      setMaxItems(value);
+      setMaxItemsDraft(String(value));
+    }).catch(console.error);
     fetchItems();
     const interval = setInterval(fetchItems, 1000);
     return () => clearInterval(interval);
@@ -134,8 +140,14 @@ export default function Clipboard() {
               type="number"
               min={1}
               max={500}
-              value={maxItems}
-              onChange={(e) => updateMaxItems(Number(e.target.value))}
+              value={maxItemsDraft}
+              onChange={(e) => setMaxItemsDraft(e.target.value)}
+              onBlur={() => updateMaxItems(maxItemsDraft)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }}
               className="macos-input py-1 text-xs"
               style={{ width: 68 }}
             />

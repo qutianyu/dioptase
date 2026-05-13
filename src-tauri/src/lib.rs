@@ -28,6 +28,7 @@ pub fn run() {
             postgres: std::sync::Mutex::new(std::collections::HashMap::new()),
             sqlite: std::sync::Mutex::new(std::collections::HashMap::new()),
             redis: std::sync::Mutex::new(std::collections::HashMap::new()),
+            redis_databases: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
         .manage(SshState::new())
         .manage(GitState::new())
@@ -87,6 +88,8 @@ pub fn run() {
             db_commands::drop_table_index,
             db_commands::add_column,
             db_commands::drop_column,
+            db_commands::redis_select_database,
+            db_commands::redis_current_databases,
             db_commands::redis_scan_keys,
             db_commands::redis_get_key,
             db_commands::redis_execute,

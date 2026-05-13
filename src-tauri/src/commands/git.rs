@@ -139,7 +139,7 @@ pub fn git_status(repo_path: String) -> Result<GitStatusResult, String> {
         .trim()
         .to_string();
 
-    let status_raw = git(&repo_path, &["status", "--porcelain", "--branch"])?;
+    let status_raw = git(&repo_path, &["-c", "core.quotePath=false", "status", "--porcelain", "--branch"])?;
     let mut lines: Vec<&str> = status_raw.lines().collect();
 
     // Parse branch line: "## main...origin/main [ahead 1, behind 2]"

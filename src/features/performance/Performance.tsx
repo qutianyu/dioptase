@@ -1,6 +1,26 @@
 import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Activity, Cpu, HardDrive, Clock, RotateCcw, ArrowDown, ArrowUp, Layers, Network, Zap, ListTree } from "lucide-react";
+import {
+  Activity,
+  AppWindow,
+  Cpu,
+  HardDrive,
+  Clock,
+  RotateCcw,
+  ArrowDown,
+  ArrowUp,
+  Layers,
+  Network,
+  Zap,
+  ListTree,
+  Terminal,
+  Chrome,
+  Compass,
+  Code2,
+  Database,
+  Shield,
+  Settings,
+} from "lucide-react";
 
 type ProcessInfo = {
   pid: number;
@@ -13,6 +33,7 @@ type ProcessInfo = {
   run_time: number;
   status: string;
   energy_impact: number;
+  icon_data_url: string | null;
 };
 
 type SystemStats = {
@@ -91,6 +112,18 @@ function formatSystemTimeLabel(timestamp: number): string {
     second: "2-digit",
     hour12: false,
   });
+}
+
+function processIconMeta(name: string) {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("chrome") || normalized.includes("chromium")) return { icon: Chrome, color: "#34a853", bg: "rgba(52, 168, 83, 0.12)" };
+  if (normalized.includes("safari") || normalized.includes("webkit")) return { icon: Compass, color: "#007aff", bg: "rgba(0, 122, 255, 0.12)" };
+  if (normalized.includes("terminal") || normalized.includes("zsh") || normalized.includes("bash") || normalized.includes("shell")) return { icon: Terminal, color: "#30d158", bg: "rgba(48, 209, 88, 0.12)" };
+  if (normalized.includes("code") || normalized.includes("cursor") || normalized.includes("node")) return { icon: Code2, color: "#5856d6", bg: "rgba(88, 86, 214, 0.12)" };
+  if (normalized.includes("sql") || normalized.includes("redis") || normalized.includes("postgres") || normalized.includes("mysql")) return { icon: Database, color: "#ff9500", bg: "rgba(255, 149, 0, 0.12)" };
+  if (normalized.includes("security") || normalized.includes("trustd") || normalized.includes("keychain")) return { icon: Shield, color: "#af52de", bg: "rgba(175, 82, 222, 0.12)" };
+  if (normalized.includes("system") || normalized.includes("kernel") || normalized.includes("launchd")) return { icon: Settings, color: "#86868b", bg: "rgba(134, 134, 139, 0.14)" };
+  return { icon: AppWindow, color: "#007aff", bg: "rgba(0, 122, 255, 0.1)" };
 }
 
 export default function Performance() {
@@ -500,21 +533,42 @@ export default function Performance() {
                 {stats.processes.length === 0 ? (
                   <div className="px-3 py-6 text-center text-xs" style={{ color: "var(--text-muted)" }}>暂无进程数据</div>
                 ) : (
-                  stats.processes.map((process) => (
-                    <div
-                      key={process.pid}
-                      className="grid grid-cols-[80px_minmax(0,1fr)_72px_96px_80px_96px_88px] gap-3 px-3 py-2.5 items-center text-xs"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      <span className="tabular-nums" style={{ color: "var(--text-muted)" }}>{process.pid}</span>
-                      <span className="truncate font-medium" style={{ color: "var(--text-primary)" }} title={process.name}>{process.name}</span>
-                      <span className="text-right tabular-nums">{process.cpu_usage.toFixed(1)}%</span>
-                      <span className="text-right tabular-nums">{formatDataSize(process.memory)}</span>
-                      <span className="text-right tabular-nums">{process.energy_impact.toFixed(0)}</span>
-                      <span className="text-right tabular-nums">{formatUptime(process.run_time)}</span>
-                      <span className="text-right truncate" title={process.status}>{process.status}</span>
-                    </div>
-                  ))
+                  stats.processes.map((process) => {
+                    const iconMeta = processIconMeta(process.name);
+                    const Icon = iconMeta.icon;
+                    return (
+                      <div
+                        key={process.pid}
+                        className="grid grid-cols-[80px_minmax(0,1fr)_72px_96px_80px_96px_88px] gap-3 px-3 py-2.5 items-center text-xs"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        <span className="tabular-nums" style={{ color: "var(--text-muted)" }}>{process.pid}</span>
+                        <span className="flex items-center gap-2 min-w-0">
+                          {process.icon_data_url ? (
+                            <img
+                              src={process.icon_data_url}
+                              alt=""
+                              className="w-7 h-7 rounded-md shrink-0"
+                              style={{ objectFit: "contain" }}
+                            />
+                          ) : (
+                            <span
+                              className="w-7 h-7 rounded-md flex items-center justify-center shrink-0"
+                              style={{ background: iconMeta.bg, color: iconMeta.color }}
+                            >
+                              <Icon size={14} />
+                            </span>
+                          )}
+                          <span className="truncate font-medium" style={{ color: "var(--text-primary)" }} title={process.name}>{process.name}</span>
+                        </span>
+                        <span className="text-right tabular-nums">{process.cpu_usage.toFixed(1)}%</span>
+                        <span className="text-right tabular-nums">{formatDataSize(process.memory)}</span>
+                        <span className="text-right tabular-nums">{process.energy_impact.toFixed(0)}</span>
+                        <span className="text-right tabular-nums">{formatUptime(process.run_time)}</span>
+                        <span className="text-right truncate" title={process.status}>{process.status}</span>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>

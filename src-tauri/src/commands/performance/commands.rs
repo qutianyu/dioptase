@@ -1,4 +1,8 @@
+use base64::Engine;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 use sysinfo::{Disks, Networks, System};
@@ -15,6 +19,7 @@ pub struct ProcessInfo {
     pub run_time: u64,
     pub status: String,
     pub energy_impact: f32,
+    pub icon_data_url: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -63,6 +68,93 @@ struct DiskIoSnapshot {
 static DISK_IO_SNAPSHOT: OnceLock<Mutex<DiskIoSnapshot>> = OnceLock::new();
 static SYSTEM_SNAPSHOT: OnceLock<Mutex<System>> = OnceLock::new();
 static NETWORK_SNAPSHOT: OnceLock<Mutex<Networks>> = OnceLock::new();
+static PROCESS_ICON_CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+
+fn find_app_bundle(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .find(|ancestor| ancestor.extension().is_some_and(|ext| ext == "app"))
+        .map(Path::to_path_buf)
+}
+
+fn plist_string_value(plist: &str, key: &str) -> Option<String> {
+    let key_marker = format!("<key>{}</key>", key);
+    let key_pos = plist.find(&key_marker)?;
+    let after_key = &plist[key_pos + key_marker.len()..];
+    let string_start = after_key.find("<string>")? + "<string>".len();
+    let after_start = &after_key[string_start..];
+    let string_end = after_start.find("</string>")?;
+    Some(after_start[..string_end].trim().to_string())
+}
+
+fn app_icon_file(app_bundle: &Path) -> Option<PathBuf> {
+    let resources = app_bundle.join("Contents/Resources");
+    let info_plist = app_bundle.join("Contents/Info.plist");
+
+    if let Ok(plist) = std::fs::read_to_string(&info_plist) {
+        if let Some(icon_name) = plist_string_value(&plist, "CFBundleIconFile") {
+            let icon_file = if icon_name.ends_with(".icns") {
+                resources.join(icon_name)
+            } else {
+                resources.join(format!("{}.icns", icon_name))
+            };
+            if icon_file.exists() {
+                return Some(icon_file);
+            }
+        }
+    }
+
+    std::fs::read_dir(resources)
+        .ok()?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "icns"))
+}
+
+fn cache_file_for_icon(icon_file: &Path) -> Option<PathBuf> {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    icon_file.hash(&mut hasher);
+    let cache_dir = dirs::cache_dir()
+        .or_else(dirs::data_local_dir)?
+        .join("dioptase/process-icons");
+    std::fs::create_dir_all(&cache_dir).ok()?;
+    Some(cache_dir.join(format!("{:x}.png", hasher.finish())))
+}
+
+fn convert_icns_to_png(icon_file: &Path, png_file: &Path) -> bool {
+    std::process::Command::new("sips")
+        .args(["-s", "format", "png"])
+        .arg(icon_file)
+        .args(["--out"])
+        .arg(png_file)
+        .output()
+        .map(|output| output.status.success() && png_file.exists())
+        .unwrap_or(false)
+}
+
+fn process_icon_data_url(exe_path: Option<&Path>) -> Option<String> {
+    let exe_path = exe_path?;
+    let app_bundle = find_app_bundle(exe_path)?;
+    let cache_key = app_bundle.to_string_lossy().to_string();
+    let icon_cache = PROCESS_ICON_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+
+    if let Some(cached) = icon_cache.lock().unwrap().get(&cache_key).cloned() {
+        return cached;
+    }
+
+    let result = app_icon_file(&app_bundle)
+        .and_then(|icon_file| {
+            let png_file = cache_file_for_icon(&icon_file)?;
+            if !png_file.exists() && !convert_icns_to_png(&icon_file, &png_file) {
+                return None;
+            }
+            let png = std::fs::read(png_file).ok()?;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(png);
+            Some(format!("data:image/png;base64,{}", b64))
+        });
+
+    icon_cache.lock().unwrap().insert(cache_key, result.clone());
+    result
+}
 
 fn extract_all_ioreg_values(text: &str, key: &str) -> Vec<u64> {
     let mut values = Vec::new();
@@ -227,6 +319,7 @@ fn get_processes(sys: &System, memory_total: u64) -> Vec<ProcessInfo> {
                 run_time: process.run_time(),
                 status: process.status().to_string(),
                 energy_impact: impact,
+                icon_data_url: process_icon_data_url(process.exe()),
             }
         })
         .collect();
